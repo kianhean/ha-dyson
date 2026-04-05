@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 
 from . import DysonConfigEntry, DysonEntity
+from .const import DEVICE_TYPE_HUSHJET
 
 
 # Devices push state over MQTT; commands are not rate limited.
@@ -29,7 +30,8 @@ async def async_setup_entry(
         DysonContinuousMonitoringSwitchEntity(device, name),
         DysonAutoModeSwitchEntity(device, name),
     ]
-    if not isinstance(device, DysonBigQuiet):
+    # The Big+Quiet and the HushJet do not oscillate.
+    if not isinstance(device, DysonBigQuiet) and device.device_type != DEVICE_TYPE_HUSHJET:
         entities.append(DysonOscillationSwitchEntity(device, name))
     if isinstance(device, DysonPureHotCoolLink):
         entities.append(DysonFocusModeSwitchEntity(device, name))

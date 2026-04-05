@@ -7,3 +7,7 @@ CONF_CREDENTIAL = "credential"
 CONF_DEVICE_TYPE = "device_type"
 
 DATA_DISCOVERY = "discovery"
+
+# Device types not yet supported by libdyson-neon.
+# These are handled locally until upstream adds support.
+DEVICE_TYPE_HUSHJET = "897"

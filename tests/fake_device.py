@@ -47,6 +47,8 @@ EXTRA_STATE: dict[str, dict[str, str]] = {
     DEVICE_TYPE: {},
     # Pure Hot+Cool (HP04)
     "527": {"hmod": "OFF", "hmax": "2960", "hsta": "OFF", "ffoc": "ON", "tilt": "OK"},
+    # HushJet Purifier Compact (HJ10); handled as a Pure Cool by the integration.
+    "897": {},
     # Pure Humidify+Cool (PH01)
     "358": {
         "ancp": "0045",
