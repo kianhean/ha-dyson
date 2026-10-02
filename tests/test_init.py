@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_ENTITY_ID, STATE_OFF, STATE_ON
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from libdyson.dyson_device import DysonDevice
 from libdyson.exceptions import DysonConnectTimeout
 import pytest
@@ -244,3 +244,41 @@ async def test_cloud_account_starts_device_discovery(hass: HomeAssistant) -> Non
     assert flows[0]["context"]["unique_id"] == SERIAL
 
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.parametrize("device_type", ["897"])
+async def test_hushjet_entities(
+    hass: HomeAssistant, config_entry: MockConfigEntry, fake_fan, device_type: str
+) -> None:
+    """The HJ10 gets only the controls and sensors it has."""
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    assert config_entry.state is ConfigEntryState.LOADED
+
+    registry = er.async_get(hass)
+    unique_ids = {
+        entry.unique_id
+        for entry in er.async_entries_for_config_entry(registry, config_entry.entry_id)
+    }
+    assert {
+        SERIAL,
+        f"{SERIAL}-pm25",
+        f"{SERIAL}-pm10",
+        f"{SERIAL}-night_mode",
+        f"{SERIAL}-continuous_monitoring",
+        f"{SERIAL}-carbon_filter_life",
+        f"{SERIAL}-hepa_filter_life",
+    } <= unique_ids
+    assert not {
+        f"{SERIAL}-oscillation",
+        f"{SERIAL}-airflow_direction",
+        f"{SERIAL}-humidity",
+        f"{SERIAL}-temperature",
+    } & unique_ids
+
+    fan = hass.states.get(_entity_id(hass, "fan"))
+    assert fan.state == STATE_ON
+    assert fan.attributes["percentage"] == 50
+
+    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, SERIAL)})
+    assert device.model == "HushJet Purifier Compact (HJ10)"

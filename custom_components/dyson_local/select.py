@@ -19,6 +19,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 
 from . import DysonConfigEntry, DysonEntity
+from .const import DEVICE_TYPE_HUSHJET
 
 AIR_QUALITY_TARGET_ENUM_TO_STR = {
     AirQualityTarget.OFF: "Off",
@@ -100,7 +101,11 @@ async def async_setup_entry(
                 DysonTiltSelect(device, name),
             ]
         )
-    if isinstance(device, (DysonPureCoolBase, DysonBigQuiet)):
+    # The HushJet has no airflow direction control.
+    if (
+        isinstance(device, (DysonPureCoolBase, DysonBigQuiet))
+        and device.device_type != DEVICE_TYPE_HUSHJET
+    ):
         entities.append(DysonAirflowDirectionSelect(device, name))
     async_add_entities(entities)
 
