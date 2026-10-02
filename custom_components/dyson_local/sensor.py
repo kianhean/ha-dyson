@@ -1,6 +1,6 @@
 """Sensor platform for dyson."""
 
-from typing import Callable, Union, Optional
+from typing import Optional
 
 from libdyson import (
     Dyson360Eye,
@@ -13,10 +13,9 @@ from libdyson import (
 )
 
 from libdyson.const import MessageType
-from libdyson.dyson_device import DysonFanDevice
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass, SensorEntity
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.const import (
     CONF_NAME,
     PERCENTAGE,
@@ -44,21 +43,25 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
 )
 
-from . import DysonEntity
-from .const import DATA_COORDINATORS, DATA_DEVICES, DOMAIN
-from .utils import environmental_property
+from . import DysonConfigEntry, DysonEntity
+
+
+# Devices push state over MQTT; commands are not rate limited.
+PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: Callable
+    hass: HomeAssistant,
+    config_entry: DysonConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Dyson sensor from a config entry."""
-    device = hass.data[DOMAIN][DATA_DEVICES][config_entry.entry_id]
+    device = config_entry.runtime_data.device
     name = config_entry.data[CONF_NAME]
     if isinstance(device, Dyson360Eye) or isinstance(device, Dyson360Heurist) or isinstance(device, Dyson360VisNav):
         entities = [DysonBatterySensor(device, name)]
     else:
-        coordinator = hass.data[DOMAIN][DATA_COORDINATORS][config_entry.entry_id]
+        coordinator = config_entry.runtime_data.coordinator
         entities = [
             DysonHumiditySensor(coordinator, device, name),
             DysonTemperatureSensor(coordinator, device, name),

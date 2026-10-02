@@ -1,6 +1,7 @@
 """Support for Dyson devices."""
 
 import asyncio
+from dataclasses import dataclass
 from datetime import timedelta
 from functools import partial
 import logging
@@ -11,16 +12,15 @@ from homeassistant.config_entries import SOURCE_DISCOVERY, ConfigEntry
 from homeassistant.const import CONF_HOST, EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .cloud.const import CONF_AUTH, CONF_REGION, DATA_ACCOUNT, DATA_DEVICES
+from .cloud.const import CONF_AUTH, CONF_REGION
 from .const import (
     CONF_CREDENTIAL,
     CONF_DEVICE_TYPE,
     CONF_SERIAL,
-    DATA_COORDINATORS,
-    DATA_DEVICES,
     DATA_DISCOVERY,
     DOMAIN,
 )
@@ -34,13 +34,12 @@ from libdyson import (
     MessageType,
     get_device,
 )
-from libdyson.cloud import DysonAccount, DysonAccountCN
+from libdyson.cloud import DysonAccount, DysonAccountCN, DysonDeviceInfo
 from libdyson.discovery import DysonDiscovery
 from libdyson.dyson_device import DysonDevice
 from libdyson.exceptions import (
     DysonException,
     DysonInvalidAuth,
-    DysonLoginFailure,
     DysonNetworkError,
 )
 
@@ -51,11 +50,35 @@ ENVIRONMENTAL_DATA_UPDATE_INTERVAL = timedelta(seconds=30)
 PLATFORMS = ["camera"]
 
 
+@dataclass
+class DysonDeviceData:
+    """Runtime data of a connected device entry."""
+
+    device: DysonDevice
+    coordinator: Optional[DataUpdateCoordinator]
+
+
+@dataclass
+class DysonAccountData:
+    """Runtime data of a MyDyson account entry."""
+
+    account: DysonAccount | DysonAccountCN
+    devices: list[DysonDeviceInfo]
+
+
+type DysonConfigEntry = ConfigEntry[DysonDeviceData | DysonAccountData | None]
+
+
+def _device_data(entry: ConfigEntry) -> Optional[DysonDeviceData]:
+    """Return the entry's device data once the device has connected."""
+    data = getattr(entry, "runtime_data", None)
+    return data if isinstance(data, DysonDeviceData) else None
+
+
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up Dyson integration."""
+    # Shared by every device entry that finds its device through zeroconf.
     hass.data[DOMAIN] = {
-        DATA_DEVICES: {},
-        DATA_COORDINATORS: {},
         DATA_DISCOVERY: None,
         "discovery_count": 0,  # Track how many entries use discovery
         "device_ips": {},  # Cache of device serial -> IP mappings
@@ -97,19 +120,17 @@ async def async_setup_account(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
         )
 
-    hass.data[DOMAIN][entry.entry_id] = {
-        DATA_ACCOUNT: account,
-        DATA_DEVICES: devices,
-    }
+    entry.runtime_data = DysonAccountData(account=account, devices=devices)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: DysonConfigEntry) -> bool:
     """Set up Dyson from a config entry."""
     _LOGGER.debug("Setting up entry: %s", entry.entry_id)
-    
+    entry.runtime_data = None
+
     if CONF_REGION in entry.data:
         return await async_setup_account(hass, entry)
 
@@ -188,10 +209,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.error("Failed to connect to device %s at %s during setup: %s", device.serial, host, str(e))
             raise ConfigEntryNotReady from e
         
-        # Store device and coordinator data
-        hass.data[DOMAIN][DATA_DEVICES][entry.entry_id] = device
-        hass.data[DOMAIN][DATA_COORDINATORS][entry.entry_id] = coordinator
-        _LOGGER.debug("Stored device %s and coordinator in hass.data", device.serial)
+        entry.runtime_data = DysonDeviceData(device=device, coordinator=coordinator)
         
         # Set up platforms
         try:
@@ -204,8 +222,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception as e:
             _LOGGER.error("Failed to set up platforms for %s: %s", device.serial, str(e))
             # Clean up on platform setup failure
-            hass.data[DOMAIN][DATA_DEVICES].pop(entry.entry_id, None)
-            hass.data[DOMAIN][DATA_COORDINATORS].pop(entry.entry_id, None)
+            entry.runtime_data = None
             try:
                 device.disconnect()
             except Exception:
@@ -266,7 +283,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     # For discovery-based devices, we might not have immediate connection
     # The device will connect when discovered, so don't fail here
-    if entry.data.get(CONF_HOST) and entry.entry_id not in hass.data[DOMAIN][DATA_DEVICES]:
+    if entry.data.get(CONF_HOST) and _device_data(entry) is None:
         # Only fail for static host devices that should have connected immediately
         _LOGGER.error("Device setup verification failed - device %s not found in data after setup", device.serial)
         raise ConfigEntryNotReady
@@ -274,7 +291,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: DysonConfigEntry) -> bool:
     """Unload Dyson local."""
     _LOGGER.debug("Unloading entry: %s", entry.entry_id)
     
@@ -287,27 +304,19 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if CONF_REGION in entry.data:
         _LOGGER.debug("Unloading cloud account entry: %s", entry.entry_id)
         # Unload camera platform for cloud accounts
-        unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-        if unload_ok and entry.entry_id in hass.data[DOMAIN]:
-            hass.data[DOMAIN].pop(entry.entry_id)
-        return unload_ok
-    
-    # Ensure sub-dictionaries exist for device entries
-    if DATA_DEVICES not in hass.data[DOMAIN]:
-        hass.data[DOMAIN][DATA_DEVICES] = {}
-    if DATA_COORDINATORS not in hass.data[DOMAIN]:
-        hass.data[DOMAIN][DATA_COORDINATORS] = {}
+        return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
     if "discovery_count" not in hass.data[DOMAIN]:
         hass.data[DOMAIN]["discovery_count"] = 0
-    
-    # Check if the entry exists in our data
-    if entry.entry_id not in hass.data[DOMAIN][DATA_DEVICES]:
+
+    data = _device_data(entry)
+    if data is None:
         _LOGGER.debug("Entry %s not found in devices data during unload - this is normal during reload operations", entry.entry_id)
         # For missing entries, just return True since there's nothing to unload
         # Don't try to unload platforms as they may not have been properly loaded
         return True
     
-    device: DysonDevice = hass.data[DOMAIN][DATA_DEVICES][entry.entry_id]
+    device = data.device
     
     # Get the platforms that should be unloaded based on device type
     expected_platforms = _async_get_platforms(device)
@@ -344,8 +353,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Always proceed with cleanup, even if platform unload had issues
     
-    # Handle discovery cleanup BEFORE removing device from DATA_DEVICES
-    # This ensures the preservation logic can properly check for other devices
     _LOGGER.debug("Checking if entry uses discovery - CONF_HOST: %s", entry.data.get(CONF_HOST))
     if entry.data.get(CONF_HOST) is None:  # Only if using discovery
         _LOGGER.debug("Entry uses discovery, handling discovery cleanup")
@@ -396,7 +403,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.debug("Entry uses static host, skipping discovery cleanup")
     
     # Clean up coordinator
-    coordinator = hass.data[DOMAIN][DATA_COORDINATORS].pop(entry.entry_id, None)
+    coordinator = data.coordinator
     if coordinator:
         try:
             # Stop the coordinator if it's running
@@ -406,9 +413,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception as e:
             _LOGGER.warning("Error shutting down coordinator for %s: %s", device.serial, e)
     
-    # Remove from data dictionaries
-    hass.data[DOMAIN][DATA_DEVICES].pop(entry.entry_id, None)
-    
+    entry.runtime_data = None
+
     # Disconnect device
     try:
         await hass.async_add_executor_job(device.disconnect)
@@ -426,34 +432,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     _LOGGER.debug("Completed unload for entry %s (device: %s)", entry.entry_id, device.serial if 'device' in locals() else 'unknown')
     return True  # Always return True since we completed cleanup
-
-
-async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Reload Dyson entry."""
-    _LOGGER.debug("Reloading entry: %s", entry.entry_id)
-    
-    # Unload the entry first
-    unload_result = await async_unload_entry(hass, entry)
-    if not unload_result:
-        _LOGGER.error("Failed to unload entry %s during reload", entry.entry_id)
-        return False
-    
-    # Add a longer delay to ensure complete cleanup and entity registry processing
-    # This is critical for proper entity lifecycle management during reload
-    await asyncio.sleep(1.5)
-    
-    # Set up the entry again
-    try:
-        setup_result = await async_setup_entry(hass, entry)
-        if not setup_result:
-            _LOGGER.error("Failed to set up entry %s during reload", entry.entry_id)
-            return False
-    except Exception as e:
-        _LOGGER.error("Exception during setup of entry %s during reload: %s", entry.entry_id, e)
-        return False
-    
-    _LOGGER.debug("Successfully reloaded entry: %s", entry.entry_id)
-    return True
 
 
 @callback
@@ -478,6 +456,7 @@ class DysonEntity(Entity):
     """Dyson entity base class."""
 
     _MESSAGE_TYPE = MessageType.STATE
+    _attr_has_entity_name = True
 
     def __init__(self, device: DysonDevice, name: str):
         """Initialize the entity."""
@@ -505,11 +484,9 @@ class DysonEntity(Entity):
         return False
 
     @property
-    def name(self) -> str:
-        """Return the name of the entity."""
-        if self.sub_name is None:
-            return self._name
-        return f"{self._name} {self.sub_name}"
+    def name(self) -> Optional[str]:
+        """Return the entity name; the main entity of a device takes the device name."""
+        return self.sub_name
 
     @property
     def sub_name(self) -> Optional[str]:
@@ -529,14 +506,14 @@ class DysonEntity(Entity):
         return None
 
     @property
-    def device_info(self) -> dict:
+    def device_info(self) -> DeviceInfo:
         """Return device info of the entity."""
-        return {
-            "identifiers": {(DOMAIN, self._device.serial)},
-            "name": self._name,
-            "manufacturer": "Dyson",
-            "model": self._device.device_type,
-        }
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._device.serial)},
+            name=self._name,
+            manufacturer="Dyson",
+            model=self._device.device_type,
+        )
 
 async def _async_register_device_with_discovery(
     hass: HomeAssistant, discovery: DysonDiscovery, device: DysonDevice, setup_entry, entry: ConfigEntry
@@ -564,7 +541,7 @@ async def _async_register_device_with_discovery(
     await asyncio.sleep(0.5)
     
     # Check if the device was actually connected
-    if entry.entry_id not in hass.data[DOMAIN][DATA_DEVICES]:
+    if _device_data(entry) is None:
         # Check if we have a cached IP for this device
         device_ips = hass.data[DOMAIN].get("device_ips", {})
         if device.serial in device_ips:

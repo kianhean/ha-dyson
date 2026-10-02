@@ -123,6 +123,6 @@ asyncio_default_fixture_loop_scope = "function"
 target-version = "py313"
 
 [tool.ruff.lint]
-# Correctness checks that gate CI: syntax errors, undefined names, invalid
-# comparisons and misplaced statements. Widen this as the codebase is cleaned up.
-select = ["E9", "F63", "F7", "F82"]
+# Correctness checks that gate CI: syntax errors and pyflakes (undefined or
+# unused names, redefinitions). Widen this as the codebase is cleaned up.
+select = ["E9", "F"]

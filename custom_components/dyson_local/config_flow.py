@@ -45,7 +45,7 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.components.zeroconf import async_get_instance
-from homeassistant.const import CONF_HOST, CONF_NAME, CONF_EMAIL, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.const import CONF_HOST, CONF_NAME, CONF_EMAIL, CONF_PASSWORD
 from homeassistant.exceptions import HomeAssistantError
 
 from .const import CONF_CREDENTIAL, CONF_DEVICE_TYPE, CONF_SERIAL, DOMAIN

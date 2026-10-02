@@ -270,12 +270,15 @@ def test_reload_reconnects(api: HomeAssistantApi, entry_id: str, name: str) -> N
     wait_for(lambda: api.state(fan_id)["state"] != "unavailable", what="the fan to come back")
 
 
-def test_no_integration_errors_logged(api: HomeAssistantApi, entry_id: str) -> None:
+def test_no_integration_warnings_logged(api: HomeAssistantApi, entry_id: str) -> None:
+    """Errors and warnings, including Home Assistant's deprecation notices."""
     response = api._session.get(f"{HA_URL}/api/error_log", timeout=10)
     response.raise_for_status()
-    errors = [
+    problems = [
         line
         for line in response.text.splitlines()
-        if " ERROR " in line and ("dyson_local" in line or "libdyson" in line)
+        if (" ERROR " in line or " WARNING " in line)
+        and ("dyson_local" in line or "libdyson" in line)
+        and "has not been tested by Home Assistant" not in line
     ]
-    assert not errors, "\n".join(errors)
+    assert not problems, "\n".join(problems)

@@ -1,6 +1,6 @@
 """Vacuum platform for Dyson."""
 
-from typing import Any, Callable, List, Mapping
+from typing import Any, List, Mapping
 
 from libdyson import (
     Dyson360Eye,
@@ -17,12 +17,11 @@ from homeassistant.components.vacuum import (
     VacuumActivity,
     VacuumEntityFeature,
 )
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 
-from . import DysonEntity
-from .const import DATA_DEVICES, DOMAIN
+from . import DysonConfigEntry, DysonEntity
 
 SUPPORTED_FEATURES = (
     VacuumEntityFeature.START
@@ -133,11 +132,17 @@ VIS_NAV_POWER_MODE_STR_TO_ENUM = {
 ATTR_POSITION = "position"
 
 
+# Devices push state over MQTT; commands are not rate limited.
+PARALLEL_UPDATES = 0
+
+
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: Callable
+    hass: HomeAssistant,
+    config_entry: DysonConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Dyson vacuum from a config entry."""
-    device = hass.data[DOMAIN][DATA_DEVICES][config_entry.entry_id]
+    device = config_entry.runtime_data.device
     name = config_entry.data[CONF_NAME]
     if isinstance(device, Dyson360Eye):
         entity = Dyson360EyeEntity(device, name)

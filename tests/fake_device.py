@@ -42,6 +42,26 @@ INITIAL_STATE: dict[str, str] = {
     "ancp": "CUST",
 }
 
+# Extra state reported by other fan families, keyed by device type.
+EXTRA_STATE: dict[str, dict[str, str]] = {
+    DEVICE_TYPE: {},
+    # Pure Hot+Cool (HP04)
+    "527": {"hmod": "OFF", "hmax": "2960", "hsta": "OFF", "ffoc": "ON", "tilt": "OK"},
+    # Pure Humidify+Cool (PH01)
+    "358": {
+        "ancp": "0045",
+        "hume": "HUMD",
+        "haut": "OFF",
+        "humt": "0050",
+        "rect": "0050",
+        "wath": "1350",
+        "cltr": "0100",
+        "cdrr": "0000",
+        "msta": "OFF",
+        "psta": "CLNG",
+    },
+}
+
 ENVIRONMENTAL_DATA: dict[str, str] = {
     "tact": "2950",
     "hact": "0045",
@@ -62,8 +82,9 @@ def _now() -> str:
 class FakeDysonFan:
     """Answers libdyson commands the way a real Pure Cool fan does."""
 
-    def __init__(self) -> None:
-        self.state = copy.deepcopy(INITIAL_STATE)
+    def __init__(self, device_type: str = DEVICE_TYPE) -> None:
+        self.device_type = device_type
+        self.state = {**copy.deepcopy(INITIAL_STATE), **EXTRA_STATE[device_type]}
         self.environmental = copy.deepcopy(ENVIRONMENTAL_DATA)
         self.received: list[dict[str, Any]] = []
 

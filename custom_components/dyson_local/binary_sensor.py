@@ -1,6 +1,5 @@
 """Binary sensor platform for dyson."""
 
-from typing import Callable
 
 from libdyson import (
     Dyson360Eye,
@@ -13,22 +12,27 @@ from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
 )
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 
-from . import DysonEntity
-from .const import DATA_DEVICES, DOMAIN
+from . import DysonConfigEntry, DysonEntity
 
 ICON_BIN_FULL = "mdi:delete-variant"
 
 
+# Devices push state over MQTT; commands are not rate limited.
+PARALLEL_UPDATES = 0
+
+
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: Callable
+    hass: HomeAssistant,
+    config_entry: DysonConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Dyson binary sensor from a config entry."""
-    device = hass.data[DOMAIN][DATA_DEVICES][config_entry.entry_id]
+    device = config_entry.runtime_data.device
     name = config_entry.data[CONF_NAME]
     entities = []
     if isinstance(device, Dyson360Eye):
