@@ -1,0 +1,4 @@
+# End-to-end tests (pytest tests/e2e) against the docker compose stack.
+paho-mqtt==2.1.0
+pytest==8.4.2
+requests==2.32.5

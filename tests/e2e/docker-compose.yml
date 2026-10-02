@@ -1,0 +1,49 @@
+# Real Home Assistant + a simulated Dyson Pure Cool fan, for tests/e2e.
+#
+#   HA_VERSION=stable docker compose -f tests/e2e/docker-compose.yml up -d --wait
+#   pytest tests/e2e
+#   docker compose -f tests/e2e/docker-compose.yml down -v
+name: dyson-e2e
+
+services:
+  # The fan's on-board MQTT broker. Home Assistant connects to it at "fan".
+  fan:
+    image: eclipse-mosquitto:2
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    ports:
+      - "1883:1883"
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-W", "3"]
+      interval: 2s
+      retries: 15
+
+  # The fan's firmware: answers state requests and applies STATE-SET commands.
+  simulator:
+    image: python:3.13-slim
+    working_dir: /e2e
+    environment:
+      MQTT_HOST: fan
+      PYTHONPATH: /e2e
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ../../tests:/e2e/tests:ro
+    command: sh -c "pip install --quiet --disable-pip-version-check paho-mqtt==2.1.0 && python -m tests.e2e.device_simulator"
+    depends_on:
+      fan:
+        condition: service_healthy
+
+  homeassistant:
+    image: ${HA_IMAGE:-ghcr.io/home-assistant/home-assistant}:${HA_VERSION:-stable}
+    volumes:
+      - ./config/configuration.yaml:/config/configuration.yaml:ro
+      - ../../custom_components:/config/custom_components:ro
+    ports:
+      - "8123:8123"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8123/manifest.json"]
+      interval: 5s
+      start_period: 30s
+      retries: 60
+    depends_on:
+      - simulator

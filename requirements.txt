@@ -1,0 +1,2 @@
+# Runtime requirements; keep in sync with custom_components/dyson_local/manifest.json.
+libdyson-neon==1.6.0

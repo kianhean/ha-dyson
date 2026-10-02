@@ -1,0 +1,4 @@
+# Unit and integration tests (pytest tests). Pins Home Assistant via
+# pytest-homeassistant-custom-component; Dependabot keeps it current.
+-r requirements.txt
+pytest-homeassistant-custom-component==0.13.316
