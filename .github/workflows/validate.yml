@@ -31,3 +31,7 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
+          # These check GitHub repository settings (Issues enabled, topics set),
+          # not code. Enable Issues and add topics in the repo settings, then
+          # remove this line before submitting to the HACS default store.
+          ignore: issues topics
