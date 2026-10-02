@@ -1,17 +1,17 @@
 """Camera platform for Dyson cloud."""
-from typing import Callable
 import logging
 from datetime import timedelta
 
 from homeassistant.core import HomeAssistant
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.components.camera import Camera
+from homeassistant.helpers.device_registry import DeviceInfo
 
-from libdyson.const import DEVICE_TYPE_360_EYE, DEVICE_TYPE_360_HEURIST
+from libdyson.const import DEVICE_TYPE_360_EYE
 from libdyson.cloud.cloud_360_eye import DysonCloud360Eye
 from libdyson.cloud import DysonDeviceInfo
 
-from .cloud.const import DATA_ACCOUNT, DATA_DEVICES
+from . import DysonConfigEntry
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -19,13 +19,18 @@ _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(minutes=30)
 
 
+# The cloud map is fetched one entity at a time.
+PARALLEL_UPDATES = 1
+
+
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: Callable
+    hass: HomeAssistant,
+    config_entry: DysonConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Dyson fan from a config entry."""
-    data = hass.data[DOMAIN][config_entry.entry_id]
-    account = data[DATA_ACCOUNT]
-    devices = data[DATA_DEVICES]
+    account = config_entry.runtime_data.account
+    devices = config_entry.runtime_data.devices
     entities = []
     for device in devices:
         if device.product_type not in [DEVICE_TYPE_360_EYE]:
@@ -40,6 +45,9 @@ async def async_setup_entry(
 class DysonCleaningMapEntity(Camera):
     """Dyson vacuum cleaning map entity."""
 
+    _attr_has_entity_name = True
+    _attr_name = "Cleaning Map"
+
     def __init__(self, device: DysonCloud360Eye, device_info: DysonDeviceInfo):
         super().__init__()
         self._device = device
@@ -48,25 +56,20 @@ class DysonCleaningMapEntity(Camera):
         self._image = None
 
     @property
-    def name(self) -> str:
-        """Return entity name."""
-        return f"{self._device_info.name} Cleaning Map"
-
-    @property
     def unique_id(self) -> str:
         """Return entity unique id."""
         return self._device_info.serial
 
     @property
-    def device_info(self) -> dict:
+    def device_info(self) -> DeviceInfo:
         """Return device info of the entity."""
-        return {
-            "identifiers": {(DOMAIN, self._device_info.serial)},
-            "name": self._device_info.name,
-            "manufacturer": "Dyson",
-            "model": self._device_info.product_type,
-            "sw_version": self._device_info.version,
-        }
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._device_info.serial)},
+            name=self._device_info.name,
+            manufacturer="Dyson",
+            model=self._device_info.product_type,
+            sw_version=self._device_info.version,
+        )
 
     @property
     def icon(self) -> str:

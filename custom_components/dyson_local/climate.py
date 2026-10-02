@@ -3,7 +3,6 @@
 import logging
 from typing import List, Optional
 
-from .const import DATA_DEVICES, DOMAIN
 from .utils import environmental_property
 from libdyson import DysonPureHotCoolLink
 
@@ -16,11 +15,11 @@ from homeassistant.components.climate.const import (
     ClimateEntityFeature
 )
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.const import ATTR_TEMPERATURE, CONF_NAME, UnitOfTemperature
-from homeassistant.core import Callable, HomeAssistant
+from homeassistant.core import HomeAssistant
 
-from . import DysonEntity
+from . import DysonConfigEntry, DysonEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,11 +29,17 @@ SUPPORT_FLAGS = ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.T
 SUPPORT_FLAGS_LINK = SUPPORT_FLAGS | ClimateEntityFeature.FAN_MODE
 
 
+# Devices push state over MQTT; commands are not rate limited.
+PARALLEL_UPDATES = 0
+
+
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: Callable
+    hass: HomeAssistant,
+    config_entry: DysonConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Dyson climate from a config entry."""
-    device = hass.data[DOMAIN][DATA_DEVICES][config_entry.entry_id]
+    device = config_entry.runtime_data.device
     name = config_entry.data[CONF_NAME]
     if isinstance(device, DysonPureHotCoolLink):
         entity = DysonPureHotCoolLinkEntity(device, name)
@@ -45,6 +50,11 @@ async def async_setup_entry(
 
 class DysonClimateEntity(DysonEntity, ClimateEntity):
     """Dyson climate entity base class."""
+
+    # current_temperature and current_humidity arrive on ENVIRONMENTAL messages, but the
+    # DysonEntity base class filters on MessageType.STATE, so those attributes were only
+    # refreshed when the mode or target temperature changed. None = every message type.
+    _MESSAGE_TYPE = None
 
     _enable_turn_on_off_backwards_compatibility = False
 

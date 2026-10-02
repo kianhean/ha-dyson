@@ -1,26 +1,31 @@
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.const import CONF_NAME
-from homeassistant.components.button import ButtonEntity, ButtonDeviceClass
+from homeassistant.components.button import ButtonEntity
 
-from typing import Callable, Optional
+from typing import Optional
 
-from .const import DATA_COORDINATORS, DATA_DEVICES, DOMAIN
 
-from . import DysonEntity, DysonDevice
+from . import DysonConfigEntry, DysonEntity
 
 import logging
 
 _LOGGER = logging.getLogger(__name__)
 
 
+# Devices push state over MQTT; commands are not rate limited.
+PARALLEL_UPDATES = 0
+
+
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: Callable
+    hass: HomeAssistant,
+    config_entry: DysonConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Dyson button from a config entry."""
-    device = hass.data[DOMAIN][DATA_DEVICES][config_entry.entry_id]
+    device = config_entry.runtime_data.device
     name = config_entry.data[CONF_NAME]
 
 

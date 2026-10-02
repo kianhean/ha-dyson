@@ -1,26 +1,24 @@
 """Select platform for dyson."""
 
-from typing import Callable
 
 from libdyson import (
     DysonPureCoolLink,
     DysonPureHotCoolLink,
     DysonPurifierHumidifyCool,
     HumidifyOscillationMode,
-    Tilt,
     WaterHardness,
     DysonBigQuiet,
 )
 from libdyson.const import AirQualityTarget
+from libdyson.dyson_pure_cool import DysonPureCoolBase
 
 from homeassistant.components.select import SelectEntity
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 
-from . import DysonEntity
-from .const import DATA_DEVICES, DOMAIN
+from . import DysonConfigEntry, DysonEntity
 
 AIR_QUALITY_TARGET_ENUM_TO_STR = {
     AirQualityTarget.OFF: "Off",
@@ -57,6 +55,10 @@ TILT_STR_TO_ENUM = {
 }
 
 
+AIRFLOW_DIRECTION_FRONT = "Front"
+AIRFLOW_DIRECTION_BACK = "Back"
+
+
 WATER_HARDNESS_STR_TO_ENUM = {
     "Soft": WaterHardness.SOFT,
     "Medium": WaterHardness.MEDIUM,
@@ -68,11 +70,17 @@ WATER_HARDNESS_ENUM_TO_STR = {
 }
 
 
+# Devices push state over MQTT; commands are not rate limited.
+PARALLEL_UPDATES = 0
+
+
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: Callable
+    hass: HomeAssistant,
+    config_entry: DysonConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Dyson sensor from a config entry."""
-    device = hass.data[DOMAIN][DATA_DEVICES][config_entry.entry_id]
+    device = config_entry.runtime_data.device
     name = config_entry.data[CONF_NAME]
     entities = []
     if isinstance(device, DysonPureHotCoolLink) or isinstance(
@@ -92,6 +100,8 @@ async def async_setup_entry(
                 DysonTiltSelect(device, name),
             ]
         )
+    if isinstance(device, (DysonPureCoolBase, DysonBigQuiet)):
+        entities.append(DysonAirflowDirectionSelect(device, name))
     async_add_entities(entities)
 
 
@@ -172,6 +182,38 @@ class DysonTiltSelect(DysonEntity, SelectEntity):
     def sub_unique_id(self):
         """Return the select's unique id."""
         return "tilt"
+
+
+class DysonAirflowDirectionSelect(DysonEntity, SelectEntity):
+    """Airflow direction for models with front and back airflow."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_icon = "mdi:swap-horizontal"
+    _attr_options = [AIRFLOW_DIRECTION_FRONT, AIRFLOW_DIRECTION_BACK]
+
+    @property
+    def current_option(self) -> str:
+        """Return the current selected option."""
+        if self._device.front_airflow:
+            return AIRFLOW_DIRECTION_FRONT
+        return AIRFLOW_DIRECTION_BACK
+
+    def select_option(self, option: str) -> None:
+        """Configure the new selected option."""
+        if option == AIRFLOW_DIRECTION_FRONT:
+            self._device.enable_front_airflow()
+        else:
+            self._device.disable_front_airflow()
+
+    @property
+    def sub_name(self) -> str:
+        """Return the name of the select."""
+        return "Airflow Direction"
+
+    @property
+    def sub_unique_id(self):
+        """Return the select's unique id."""
+        return "airflow_direction"
 
 
 class DysonWaterHardnessSelect(DysonEntity, SelectEntity):

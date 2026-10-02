@@ -2,7 +2,7 @@
 
 import logging
 import math
-from typing import Any, Callable, List, Mapping, Optional
+from typing import Any, List, Mapping, Optional
 
 from libdyson import DysonPureCool, DysonPureCoolLink, MessageType
 import voluptuous as vol
@@ -14,7 +14,7 @@ from homeassistant.components.fan import (
     FanEntity,
     NotValidPresetModeError,
 )
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv, entity_platform
@@ -24,8 +24,7 @@ from homeassistant.util.percentage import (
     ranged_value_to_percentage,
 )
 
-from . import DOMAIN, DysonEntity
-from .const import DATA_DEVICES
+from . import DysonConfigEntry, DysonEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,7 +41,7 @@ SET_ANGLE_SCHEMA = {
 }
 
 SET_TIMER_SCHEMA = {
-    vol.Required(ATTR_TIMER): cv.positive_int,
+    vol.Required(ATTR_TIMER): vol.All(vol.Coerce(int), vol.Range(min=0, max=540)),
 }
 
 PRESET_MODE_AUTO = "Auto"
@@ -61,11 +60,17 @@ COMMON_FEATURES = (
 )
 
 
+# Devices push state over MQTT; commands are not rate limited.
+PARALLEL_UPDATES = 0
+
+
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: Callable
+    hass: HomeAssistant,
+    config_entry: DysonConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Dyson fan from a config entry."""
-    device = hass.data[DOMAIN][DATA_DEVICES][config_entry.entry_id]
+    device = config_entry.runtime_data.device
     name = config_entry.data[CONF_NAME]
     if isinstance(device, DysonPureCoolLink):
         entity = DysonPureCoolLinkEntity(device, name)

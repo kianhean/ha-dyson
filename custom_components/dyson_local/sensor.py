@@ -1,6 +1,6 @@
 """Sensor platform for dyson."""
 
-from typing import Callable, Union, Optional
+from typing import Optional
 
 from libdyson import (
     Dyson360Eye,
@@ -13,19 +13,28 @@ from libdyson import (
 )
 
 from libdyson.const import MessageType
-from libdyson.dyson_device import DysonFanDevice
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass, SensorEntity
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.const import (
-    CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
-    CONCENTRATION_MILLIGRAMS_PER_CUBIC_METER,
-    CONCENTRATION_PARTS_PER_MILLION,
     CONF_NAME,
     PERCENTAGE,
     UnitOfTemperature,
     UnitOfTime,
 )
+
+try:
+    from homeassistant.const import UnitOfDensity, UnitOfRatio
+except ImportError:  # Older Home Assistant; the CONCENTRATION_* constants are removed in 2027.8.
+    from homeassistant.const import (
+        CONCENTRATION_MICROGRAMS_PER_CUBIC_METER as MICROGRAMS_PER_CUBIC_METER,
+        CONCENTRATION_MILLIGRAMS_PER_CUBIC_METER as MILLIGRAMS_PER_CUBIC_METER,
+        CONCENTRATION_PARTS_PER_MILLION as PARTS_PER_MILLION,
+    )
+else:
+    MICROGRAMS_PER_CUBIC_METER = UnitOfDensity.MICROGRAMS_PER_CUBIC_METER
+    MILLIGRAMS_PER_CUBIC_METER = UnitOfDensity.MILLIGRAMS_PER_CUBIC_METER
+    PARTS_PER_MILLION = UnitOfRatio.PARTS_PER_MILLION
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
@@ -34,21 +43,25 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
 )
 
-from . import DysonEntity
-from .const import DATA_COORDINATORS, DATA_DEVICES, DOMAIN
-from .utils import environmental_property
+from . import DysonConfigEntry, DysonEntity
+
+
+# Devices push state over MQTT; commands are not rate limited.
+PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: Callable
+    hass: HomeAssistant,
+    config_entry: DysonConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Dyson sensor from a config entry."""
-    device = hass.data[DOMAIN][DATA_DEVICES][config_entry.entry_id]
+    device = config_entry.runtime_data.device
     name = config_entry.data[CONF_NAME]
     if isinstance(device, Dyson360Eye) or isinstance(device, Dyson360Heurist) or isinstance(device, Dyson360VisNav):
         entities = [DysonBatterySensor(device, name)]
     else:
-        coordinator = hass.data[DOMAIN][DATA_COORDINATORS][config_entry.entry_id]
+        coordinator = config_entry.runtime_data.coordinator
         entities = [
             DysonHumiditySensor(coordinator, device, name),
             DysonTemperatureSensor(coordinator, device, name),
@@ -291,7 +304,7 @@ class DysonPM25Sensor(DysonSensorEnvironmental):
     _SENSOR_TYPE = "pm25"
     _SENSOR_NAME = "PM 2.5"
     _attr_device_class = SensorDeviceClass.PM25
-    _attr_native_unit_of_measurement = CONCENTRATION_MICROGRAMS_PER_CUBIC_METER
+    _attr_native_unit_of_measurement = MICROGRAMS_PER_CUBIC_METER
     _attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
@@ -313,7 +326,7 @@ class DysonPM10Sensor(DysonSensorEnvironmental):
     _SENSOR_TYPE = "pm10"
     _SENSOR_NAME = "PM 10"
     _attr_device_class = SensorDeviceClass.PM10
-    _attr_native_unit_of_measurement = CONCENTRATION_MICROGRAMS_PER_CUBIC_METER
+    _attr_native_unit_of_measurement = MICROGRAMS_PER_CUBIC_METER
     _attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
@@ -397,7 +410,7 @@ class DysonHCHOSensor(DysonSensorEnvironmental):
     _SENSOR_TYPE = "hcho-mg"
     _SENSOR_NAME = "HCHO"
 
-    _attr_native_unit_of_measurement = CONCENTRATION_MILLIGRAMS_PER_CUBIC_METER
+    _attr_native_unit_of_measurement = MILLIGRAMS_PER_CUBIC_METER
     _attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
@@ -420,7 +433,7 @@ class DysonCarbonDioxideSensor(DysonSensorEnvironmental):
     _SENSOR_NAME = "Carbon Dioxide"
 
     _attr_device_class = SensorDeviceClass.CO2
-    _attr_native_unit_of_measurement = CONCENTRATION_PARTS_PER_MILLION
+    _attr_native_unit_of_measurement = PARTS_PER_MILLION
     _attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
