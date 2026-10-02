@@ -2,3 +2,5 @@
 # pytest-homeassistant-custom-component; Dependabot keeps it current.
 -r requirements.txt
 pytest-homeassistant-custom-component==0.13.316
+# Requirements of Home Assistant components the integration imports (camera).
+PyTurboJPEG==1.8.0

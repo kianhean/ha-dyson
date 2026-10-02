@@ -30,7 +30,7 @@ jobs:
       fail-fast: false
       matrix:
         # Minimum supported version (keep in sync with hacs.json), current, and upcoming.
-        ha-version: ["2024.11.0", "stable", "beta"]
+        ha-version: ["2025.1.0", "stable", "beta"]
     env:
       HA_VERSION: ${{ matrix.ha-version }}
       COMPOSE_FILE: tests/e2e/docker-compose.yml

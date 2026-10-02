@@ -5,10 +5,8 @@ from typing import Callable
 from libdyson import (
     DysonPureCoolLink,
     DysonPureHotCoolLink,
-    DysonPureHotCool,
     DysonPurifierHumidifyCool,
     HumidifyOscillationMode,
-    HotCoolOscillationMode,
     Tilt,
     WaterHardness,
     DysonBigQuiet,
@@ -46,18 +44,6 @@ OSCILLATION_MODE_ENUM_TO_STR = {
 
 OSCILLATION_MODE_STR_TO_ENUM = {
     value: key for key, value in OSCILLATION_MODE_ENUM_TO_STR.items()
-}
-
-HOT_COOL_OSCILLATION_MODE_ENUM_TO_STR = {
-    HotCoolOscillationMode.OFF: "Off",
-    HotCoolOscillationMode.DEGREE_45: "45°",
-    HotCoolOscillationMode.DEGREE_90: "90°",
-    HotCoolOscillationMode.DEGREE_180: "180°",
-    HotCoolOscillationMode.DEGREE_350: "350°",
-}
-
-HOT_COOL_OSCILLATION_MODE_STR_TO_ENUM = {
-    value: key for key, value in HOT_COOL_OSCILLATION_MODE_ENUM_TO_STR.items()
 }
 
 TILT_ENUM_TO_STR = {
@@ -98,12 +84,6 @@ async def async_setup_entry(
         device, DysonPureCoolLink
     ):
         entities.append(DysonAirQualitySelect(device, name))
-    if isinstance(device, DysonPureHotCool):
-        entities.extend(
-            [
-                DysonHotCoolOscillationModeSelect(device, name),
-            ]
-        )
     if isinstance(device, DysonPurifierHumidifyCool):
         entities.extend(
             [
@@ -163,32 +143,6 @@ class DysonOscillationModeSelect(DysonEntity, SelectEntity):
     def select_option(self, option: str) -> None:
         """Configure the new selected option."""
         self._device.enable_oscillation(OSCILLATION_MODE_STR_TO_ENUM[option])
-
-    @property
-    def sub_name(self) -> str:
-        """Return the name of the select."""
-        return "Oscillation Mode"
-
-    @property
-    def sub_unique_id(self):
-        """Return the select's unique id."""
-        return "oscillation_mode"
-
-class DysonHotCoolOscillationModeSelect(DysonEntity, SelectEntity):
-    """Oscillation mode for Pure Hot+Cool models."""
-
-    _attr_entity_category = EntityCategory.CONFIG
-    _attr_icon = "mdi:sync"
-    _attr_options = list(HOT_COOL_OSCILLATION_MODE_STR_TO_ENUM.keys())
-
-    @property
-    def current_option(self) -> str:
-        """Return the current selected option."""
-        return HOT_COOL_OSCILLATION_MODE_ENUM_TO_STR[self._device.oscillation_mode]
-
-    def select_option(self, option: str) -> None:
-        """Configure the new selected option."""
-        self._device.enable_oscillation(HOT_COOL_OSCILLATION_MODE_STR_TO_ENUM[option])
 
     @property
     def sub_name(self) -> str:

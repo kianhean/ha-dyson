@@ -116,3 +116,56 @@ async def test_night_mode_switch(
 
     assert fake_fan.state["nmod"] == "ON"
     assert hass.states.get(switch_id).state == STATE_ON
+
+
+@pytest.mark.parametrize(
+    ("domain", "suffix", "service", "data", "expected"),
+    [
+        ("switch", "auto_mode", "turn_on", {}, {"auto": "ON"}),
+        ("switch", "oscillation", "turn_off", {}, {"oson": "OFF"}),
+        ("number", "airflow_speed", "set_value", {"value": 3}, {"fnsp": "0003", "auto": "OFF"}),
+        ("number", "sleep_timer", "set_value", {"value": 30}, {"sltm": "0030"}),
+        ("number", "sleep_timer", "set_value", {"value": 0}, {"sltm": "OFF"}),
+        ("select", "airflow_direction", "select_option", {"option": "Back"}, {"fdir": "OFF"}),
+    ],
+)
+async def test_control_entities(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    fake_fan,
+    domain: str,
+    suffix: str,
+    service: str,
+    data: dict,
+    expected: dict,
+) -> None:
+    """Each control entity sends the matching setting to the device."""
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        domain,
+        service,
+        {ATTR_ENTITY_ID: _entity_id(hass, domain, suffix), **data},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    assert {key: fake_fan.state[key] for key in expected} == expected
+
+
+async def test_sleep_timer_reports_remaining_minutes(
+    hass: HomeAssistant, config_entry: MockConfigEntry, fake_fan
+) -> None:
+    """The sleep timer number reflects the timer the device reports."""
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    timer_id = _entity_id(hass, "number", "sleep_timer")
+    assert hass.states.get(timer_id).state == "0"
+
+    await hass.services.async_call(
+        "number", "set_value", {ATTR_ENTITY_ID: timer_id, "value": 45}, blocking=True
+    )
+    await hass.async_block_till_done()
+
+    assert hass.states.get(timer_id).state == "45"

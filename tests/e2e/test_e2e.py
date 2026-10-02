@@ -252,6 +252,17 @@ def test_switch_round_trip(
     wait_for(lambda: api.state(switch_id)["state"] == "on", what="night mode to report on")
 
 
+def test_number_round_trip(
+    api: HomeAssistantApi, name: str, fan_commands: FanCommands
+) -> None:
+    number_id = api.find_entity("number", f"{name} Airflow Speed")
+
+    fan_commands.clear()
+    api.call("number", "set_value", {"entity_id": number_id, "value": 3})
+    assert fan_commands.expect_state_set()["fnsp"] == "0003"
+    wait_for(lambda: float(api.state(number_id)["state"]) == 3, what="airflow speed to report 3")
+
+
 def test_reload_reconnects(api: HomeAssistantApi, entry_id: str, name: str) -> None:
     api.post(f"/api/config/config_entries/entry/{entry_id}/reload")
     wait_for(lambda: _entry_state(api, entry_id) == "loaded", what="the entry to reload")

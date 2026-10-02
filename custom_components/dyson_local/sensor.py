@@ -20,11 +20,22 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_NAME,
     PERCENTAGE,
-    UnitOfDensity,
-    UnitOfRatio,
     UnitOfTemperature,
     UnitOfTime,
 )
+
+try:
+    from homeassistant.const import UnitOfDensity, UnitOfRatio
+except ImportError:  # Older Home Assistant; the CONCENTRATION_* constants are removed in 2027.8.
+    from homeassistant.const import (
+        CONCENTRATION_MICROGRAMS_PER_CUBIC_METER as MICROGRAMS_PER_CUBIC_METER,
+        CONCENTRATION_MILLIGRAMS_PER_CUBIC_METER as MILLIGRAMS_PER_CUBIC_METER,
+        CONCENTRATION_PARTS_PER_MILLION as PARTS_PER_MILLION,
+    )
+else:
+    MICROGRAMS_PER_CUBIC_METER = UnitOfDensity.MICROGRAMS_PER_CUBIC_METER
+    MILLIGRAMS_PER_CUBIC_METER = UnitOfDensity.MILLIGRAMS_PER_CUBIC_METER
+    PARTS_PER_MILLION = UnitOfRatio.PARTS_PER_MILLION
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
@@ -290,7 +301,7 @@ class DysonPM25Sensor(DysonSensorEnvironmental):
     _SENSOR_TYPE = "pm25"
     _SENSOR_NAME = "PM 2.5"
     _attr_device_class = SensorDeviceClass.PM25
-    _attr_native_unit_of_measurement = UnitOfDensity.MICROGRAMS_PER_CUBIC_METER
+    _attr_native_unit_of_measurement = MICROGRAMS_PER_CUBIC_METER
     _attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
@@ -312,7 +323,7 @@ class DysonPM10Sensor(DysonSensorEnvironmental):
     _SENSOR_TYPE = "pm10"
     _SENSOR_NAME = "PM 10"
     _attr_device_class = SensorDeviceClass.PM10
-    _attr_native_unit_of_measurement = UnitOfDensity.MICROGRAMS_PER_CUBIC_METER
+    _attr_native_unit_of_measurement = MICROGRAMS_PER_CUBIC_METER
     _attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
@@ -396,7 +407,7 @@ class DysonHCHOSensor(DysonSensorEnvironmental):
     _SENSOR_TYPE = "hcho-mg"
     _SENSOR_NAME = "HCHO"
 
-    _attr_native_unit_of_measurement = UnitOfDensity.MILLIGRAMS_PER_CUBIC_METER
+    _attr_native_unit_of_measurement = MILLIGRAMS_PER_CUBIC_METER
     _attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
@@ -419,7 +430,7 @@ class DysonCarbonDioxideSensor(DysonSensorEnvironmental):
     _SENSOR_NAME = "Carbon Dioxide"
 
     _attr_device_class = SensorDeviceClass.CO2
-    _attr_native_unit_of_measurement = UnitOfRatio.PARTS_PER_MILLION
+    _attr_native_unit_of_measurement = PARTS_PER_MILLION
     _attr_state_class = SensorStateClass.MEASUREMENT
 
     @property

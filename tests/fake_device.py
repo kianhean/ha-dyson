@@ -89,6 +89,9 @@ class FakeDysonFan:
         self.state.update(data)
         if "fpwr" in data:
             self.state["fnst"] = "FAN" if data["fpwr"] == "ON" else "OFF"
+        if "sltm" in data:
+            # The running timer is reported with the environmental data.
+            self.environmental["sltm"] = data["sltm"]
         return {
             "msg": "STATE-CHANGE",
             "time": _now(),
