@@ -1,24 +1,28 @@
 """Switch platform for dyson."""
 
-from typing import Callable
 
 from libdyson import DysonBigQuiet, DysonPureHotCoolLink
 
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 
-from . import DysonEntity
-from .const import DATA_DEVICES, DOMAIN
+from . import DysonConfigEntry, DysonEntity
+
+
+# Devices push state over MQTT; commands are not rate limited.
+PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: Callable
+    hass: HomeAssistant,
+    config_entry: DysonConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Dyson switch from a config entry."""
-    device = hass.data[DOMAIN][DATA_DEVICES][config_entry.entry_id]
+    device = config_entry.runtime_data.device
     name = config_entry.data[CONF_NAME]
     entities = [
         DysonNightModeSwitchEntity(device, name),

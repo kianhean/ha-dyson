@@ -1,6 +1,6 @@
 """Humidifier platform for Dyson."""
 
-from typing import Callable, Optional
+from typing import Optional
 
 from libdyson import MessageType
 
@@ -10,23 +10,28 @@ from homeassistant.components.humidifier import (
     HumidifierEntity,
 )
 from homeassistant.components.humidifier.const import MODE_AUTO, MODE_NORMAL
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 
-from . import DysonEntity
-from .const import DATA_DEVICES, DOMAIN
+from . import DysonConfigEntry, DysonEntity
 
 AVAILABLE_MODES = [MODE_NORMAL, MODE_AUTO]
 
 SUPPORTED_FEATURES = HumidifierEntityFeature.MODES
 
 
+# Devices push state over MQTT; commands are not rate limited.
+PARALLEL_UPDATES = 0
+
+
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: Callable
+    hass: HomeAssistant,
+    config_entry: DysonConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Dyson humidifier from a config entry."""
-    device = hass.data[DOMAIN][DATA_DEVICES][config_entry.entry_id]
+    device = config_entry.runtime_data.device
     name = config_entry.data[CONF_NAME]
     async_add_entities([DysonHumidifierEntity(device, name)])
 

@@ -1,13 +1,11 @@
 """Select platform for dyson."""
 
-from typing import Callable
 
 from libdyson import (
     DysonPureCoolLink,
     DysonPureHotCoolLink,
     DysonPurifierHumidifyCool,
     HumidifyOscillationMode,
-    Tilt,
     WaterHardness,
     DysonBigQuiet,
 )
@@ -15,13 +13,12 @@ from libdyson.const import AirQualityTarget
 from libdyson.dyson_pure_cool import DysonPureCoolBase
 
 from homeassistant.components.select import SelectEntity
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 
-from . import DysonEntity
-from .const import DATA_DEVICES, DOMAIN
+from . import DysonConfigEntry, DysonEntity
 
 AIR_QUALITY_TARGET_ENUM_TO_STR = {
     AirQualityTarget.OFF: "Off",
@@ -73,11 +70,17 @@ WATER_HARDNESS_ENUM_TO_STR = {
 }
 
 
+# Devices push state over MQTT; commands are not rate limited.
+PARALLEL_UPDATES = 0
+
+
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: Callable
+    hass: HomeAssistant,
+    config_entry: DysonConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Dyson sensor from a config entry."""
-    device = hass.data[DOMAIN][DATA_DEVICES][config_entry.entry_id]
+    device = config_entry.runtime_data.device
     name = config_entry.data[CONF_NAME]
     entities = []
     if isinstance(device, DysonPureHotCoolLink) or isinstance(

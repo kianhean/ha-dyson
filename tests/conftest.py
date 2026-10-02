@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tests.fake_device import FakeDysonFan
+from tests.fake_device import CREDENTIAL, DEVICE_TYPE, NAME, SERIAL, FakeDysonFan
 
 if TYPE_CHECKING:
     from libdyson.dyson_device import DysonDevice
@@ -46,7 +46,36 @@ class _LoopbackMqttClient:
 
 
 @pytest.fixture
-def fake_fan() -> Generator[FakeDysonFan]:
+def device_type() -> str:
+    """The fan family under test; override with indirect parametrization."""
+    return DEVICE_TYPE
+
+
+@pytest.fixture
+def config_entry(hass, device_type: str):
+    """A config entry for the fan at a static address."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry  # noqa: PLC0415
+
+    from custom_components.dyson_local.const import DOMAIN  # noqa: PLC0415
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title=NAME,
+        unique_id=SERIAL,
+        data={
+            "serial": SERIAL,
+            "credential": CREDENTIAL,
+            "device_type": device_type,
+            "name": NAME,
+            "host": "192.0.2.10",
+        },
+    )
+    entry.add_to_hass(hass)
+    return entry
+
+
+@pytest.fixture
+def fake_fan(device_type: str) -> Generator[FakeDysonFan]:
     """Replace libdyson's MQTT transport with an in-process fake fan.
 
     Everything above the transport (libdyson parsing, the integration,
@@ -54,7 +83,7 @@ def fake_fan() -> Generator[FakeDysonFan]:
     """
     from libdyson.dyson_device import DysonDevice  # noqa: PLC0415
 
-    fan = FakeDysonFan()
+    fan = FakeDysonFan(device_type)
 
     def _connect(self: DysonDevice, host: str) -> None:
         self._mqtt_client = _LoopbackMqttClient(self, fan)
