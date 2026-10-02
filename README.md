@@ -114,61 +114,39 @@ This is proven to work without any side effects. If you used the default IDs for
 
 ## Testing
 
-This integration includes a test suite to ensure code quality and prevent
-regressions. Here's how to run the tests:
+CI runs three layers of checks on every pull request:
 
-### Prerequisites
+| Workflow | What it checks |
+| --- | --- |
+| `Validate` | [hassfest](https://developers.home-assistant.io/blog/2020/04/16/hassfest/) and the [HACS action](https://hacs.xyz/docs/publish/action/) |
+| `Tests` | `ruff` lint, plus unit and integration tests run inside Home Assistant with [pytest-homeassistant-custom-component](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component) |
+| `E2E` | A real Home Assistant container talking MQTT to a simulated Dyson fan, on the minimum supported, current and beta Home Assistant releases |
 
-1. Install test dependencies:
+### Unit and integration tests
 
-   ```bash
-   pip install pytest pytest-homeassistant-custom-component
-   ```
-
-2. Ensure you have the project structure set up correctly with a `tests/`
-   directory at the root level.
-
-### Running Tests
-
-1. **Run all tests:**
-
-   ```bash
-   python -m pytest
-   ```
-
-2. **Run a specific test file:**
-
-   ```bash
-   python -m pytest tests/test_device_info.py
-   ```
-
-3. **Run tests with verbose output:**
-
-   ```bash
-   python -m pytest -v
-   ```
-
-4. **Run tests with coverage report:**
-
-   ```bash
-   python -m pytest --cov=custom_components.dyson_local --cov-report=term-missing
-   ```
-
-5. **Run a specific test function:**
-
-   ```bash
-   python -m pytest tests/test_device_info.py::TestDysonDeviceInfo::test_from_raw_basic -v
-   ```
-
-### Test Structure
-
-Tests are organized in the `tests/` directory:
-
-```text
-tests/
-├── __init__.py
-└── test_device_info.py
+```bash
+pip install -r requirements_test.txt
+pytest
+pytest --cov=custom_components.dyson_local --cov-report=term-missing
 ```
 
-- `__init__.py` - Empty file that marks the tests directory as a Python package
-- `test_device_info.py` - Tests for the device info module
+The integration tests (`tests/test_config_flow.py`, `tests/test_init.py`) load
+the integration into a real Home Assistant core and replace only libdyson's
+MQTT transport with an in-process fake fan (`tests/fake_device.py`).
+
+### End-to-end tests
+
+Requires Docker.
+
+```bash
+pip install -r requirements_e2e.txt
+HA_VERSION=stable docker compose -f tests/e2e/docker-compose.yml up -d --wait
+pytest tests/e2e -v
+docker compose -f tests/e2e/docker-compose.yml down -v
+```
+
+The stack runs Home Assistant, a Mosquitto broker standing in for the fan's
+on-board broker, and `tests/e2e/device_simulator.py`, which answers libdyson's
+commands like real fan firmware. The tests onboard Home Assistant, add the fan
+through the config flow, and drive it through the REST API while watching the
+commands that reach the fan.
